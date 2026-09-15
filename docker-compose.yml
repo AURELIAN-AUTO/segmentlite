@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  segmentlite:
+    build: .
+    container_name: segmentlite
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+      - DATA_DIR=/data
+    volumes:
+      - segmentlite_data:/data
+    restart: unless-stopped
+
+volumes:
+  segmentlite_data:

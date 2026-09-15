@@ -1,0 +1,13 @@
+{
+  "name": "segmentlite",
+  "version": "1.0.0",
+  "description": "Ultra-lightweight drop-in client SDK for SegmentLite event routing API",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc"
+  },
+  "keywords": ["segment", "analytics", "cdp", "telemetry", "events"],
+  "author": "Aurelian Autonomous Systems",
+  "license": "MIT"
+}

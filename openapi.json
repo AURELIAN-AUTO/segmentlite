@@ -1,0 +1,533 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "SegmentLite API",
+    "description": "High-throughput, unbundled event routing and webhook fan-out API for modern SaaS startups.",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "https://segmentlite-api-dfru.fly.dev",
+      "description": "Production Live Server"
+    }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Health Check",
+        "description": "Uptime and health check monitor.",
+        "operationId": "health_check_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/track": {
+      "post": {
+        "tags": [
+          "Events"
+        ],
+        "summary": "Track Event",
+        "description": "Ingests an event and asynchronously fans it out to all configured destinations.",
+        "operationId": "track_event_v1_track_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrackEventRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/identify": {
+      "post": {
+        "tags": [
+          "Identity"
+        ],
+        "summary": "Identify User",
+        "description": "Associates attributes and traits with a unique user profile across all destinations.",
+        "operationId": "identify_user_v1_identify_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IdentifyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/destinations": {
+      "get": {
+        "tags": [
+          "Destinations"
+        ],
+        "summary": "List Destinations",
+        "description": "Returns all currently registered webhook destinations.",
+        "operationId": "list_destinations_v1_destinations_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DestinationConfig"
+                  },
+                  "type": "array",
+                  "title": "Response List Destinations V1 Destinations Get"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Destinations"
+        ],
+        "summary": "Create Destination",
+        "description": "Configures a new target destination webhook to receive forwarded events.",
+        "operationId": "create_destination_v1_destinations_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DestinationConfig"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DestinationConfig"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/destinations/{dest_id}": {
+      "delete": {
+        "tags": [
+          "Destinations"
+        ],
+        "summary": "Delete Destination",
+        "description": "Removes a destination webhook from routing.",
+        "operationId": "delete_destination_v1_destinations__dest_id__delete",
+        "parameters": [
+          {
+            "name": "dest_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dest Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/stats": {
+      "get": {
+        "tags": [
+          "Telemetry"
+        ],
+        "summary": "Get Metrics",
+        "description": "Returns real-time event throughput, delivery success counts, and active connections.",
+        "operationId": "get_metrics_v1_stats_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "DestinationConfig": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id",
+            "description": "Unique ID of destination, generated automatically if omitted"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Human-readable label, e.g. 'Production Mixpanel Webhook'"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "description": "Destination type: 'webhook', 'slack', or 'http_relay'",
+            "default": "webhook"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url",
+            "description": "Target webhook URL to forward events to"
+          },
+          "headers": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Headers",
+            "description": "Custom headers e.g. Authorization"
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled",
+            "description": "Whether this destination actively receives traffic",
+            "default": true
+          },
+          "events_filter": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Events Filter",
+            "description": "Optional whitelist of event names to forward. None forwards all."
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "url"
+        ],
+        "title": "DestinationConfig"
+      },
+      "EventResponse": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success"
+          },
+          "event_id": {
+            "type": "string",
+            "title": "Event Id"
+          },
+          "destinations_queued": {
+            "type": "integer",
+            "title": "Destinations Queued"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "success",
+          "event_id",
+          "destinations_queued",
+          "message"
+        ],
+        "title": "EventResponse"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "IdentifyRequest": {
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "title": "User Id",
+            "description": "Unique user ID to associate traits with"
+          },
+          "traits": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Traits",
+            "description": "User attributes e.g. email, name, company, plan"
+          },
+          "context": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Context",
+            "description": "Contextual device/client data"
+          },
+          "timestamp": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timestamp"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_id"
+        ],
+        "title": "IdentifyRequest"
+      },
+      "StatsResponse": {
+        "properties": {
+          "total_events_ingested": {
+            "type": "integer",
+            "title": "Total Events Ingested"
+          },
+          "total_events_forwarded": {
+            "type": "integer",
+            "title": "Total Events Forwarded"
+          },
+          "total_failures": {
+            "type": "integer",
+            "title": "Total Failures"
+          },
+          "active_destinations_count": {
+            "type": "integer",
+            "title": "Active Destinations Count"
+          },
+          "uptime_seconds": {
+            "type": "number",
+            "title": "Uptime Seconds"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total_events_ingested",
+          "total_events_forwarded",
+          "total_failures",
+          "active_destinations_count",
+          "uptime_seconds"
+        ],
+        "title": "StatsResponse"
+      },
+      "TrackEventRequest": {
+        "properties": {
+          "event": {
+            "type": "string",
+            "title": "Event",
+            "description": "Name of the event, e.g. 'Signed Up', 'Checkout Completed'"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id",
+            "description": "Unique identifier for the user in your database"
+          },
+          "anonymous_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anonymous Id",
+            "description": "Anonymous session/device identifier"
+          },
+          "properties": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Properties",
+            "description": "Event metadata and parameters"
+          },
+          "context": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Context",
+            "description": "Device, IP, user-agent, or locale context"
+          },
+          "timestamp": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timestamp",
+            "description": "ISO 8601 timestamp of event occurrence"
+          }
+        },
+        "type": "object",
+        "required": [
+          "event"
+        ],
+        "title": "TrackEventRequest"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

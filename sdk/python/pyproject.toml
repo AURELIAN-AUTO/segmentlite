@@ -1,0 +1,6 @@
+[project]
+name = "segmentlite-sdk"
+version = "1.0.0"
+description = "Lightweight Python client SDK for SegmentLite event routing API"
+readme = "README.md"
+requires-python = ">=3.8"
