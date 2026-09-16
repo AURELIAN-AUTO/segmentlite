@@ -104,7 +104,7 @@ async def health_check():
 @app.get("/privacy", response_class=HTMLResponse, tags=["Web"])
 async def privacy_policy_page():
     """Privacy policy page."""
-    return HTMLResponse(\"\"\"<!DOCTYPE html>
+    return HTMLResponse("""<!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
   <meta charset="UTF-8">
@@ -126,7 +126,7 @@ async def privacy_policy_page():
   
   <p><a href="/" class="text-sky-400 hover:text-sky-300 underline text-sm">← Back to SegmentLite</a></p>
 </body>
-</html>\"\"\")
+</html>""")
 
 @app.post("/v1/auth/signup", response_model=SignupResponse, tags=["Auth"])
 async def signup_for_api_key(req: SignupRequest):
