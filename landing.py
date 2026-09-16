@@ -274,8 +274,14 @@ def render_comparison_page(title_suffix: str = "", stripe_pro_url: Optional[str]
   </section>
 
   <!-- Footer -->
-  <footer class="max-w-6xl mx-auto px-6 py-8 border-t border-slate-800/60 text-center text-xs text-slate-500">
-    <p>© 2026 SegmentLite. High-throughput event routing API. All trademarks belong to their respective owners.</p>
+  <footer class="max-w-6xl mx-auto px-6 py-8 border-t border-slate-800/60 text-center text-xs text-slate-500 flex flex-col sm:flex-row justify-between items-center gap-4">
+    <p>© 2026 SegmentLite. High-throughput event routing API. MIT Licensed.</p>
+    <div class="flex gap-4">
+      <a href="https://github.com/AURELIAN-AUTO/segmentlite" target="_blank" class="hover:text-slate-300 underline">GitHub</a>
+      <a href="/docs" target="_blank" class="hover:text-slate-300 underline">API Docs</a>
+      <a href="mailto:aurelian.dfru@gmail.com" class="hover:text-slate-300 underline">Support</a>
+      <a href="/privacy" class="hover:text-slate-300 underline">Privacy Policy</a>
+    </div>
   </footer>
 
   <script>

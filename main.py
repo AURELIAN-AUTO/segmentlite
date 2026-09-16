@@ -3,34 +3,21 @@ import uuid
 from typing import List, Optional
 from fastapi import FastAPI, Header, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
+
 from fastapi.responses import HTMLResponse
 
-try:
-    from models import (
-        TrackEventRequest,
-        IdentifyRequest,
-        DestinationConfig,
-        EventResponse,
-        StatsResponse,
-        SignupRequest,
-        SignupResponse,
-    )
-    from store import store
-    from router import router
-    from landing import render_comparison_page
-except ImportError:
-    from products.segmentlite.models import (
-        TrackEventRequest,
-        IdentifyRequest,
-        DestinationConfig,
-        EventResponse,
-        StatsResponse,
-        SignupRequest,
-        SignupResponse,
-    )
-    from products.segmentlite.store import store
-    from products.segmentlite.router import router
-    from products.segmentlite.landing import render_comparison_page
+from products.segmentlite.models import (
+    TrackEventRequest,
+    IdentifyRequest,
+    DestinationConfig,
+    EventResponse,
+    StatsResponse,
+    SignupRequest,
+    SignupResponse,
+)
+from products.segmentlite.store import store
+from products.segmentlite.router import router
+from products.segmentlite.landing import render_comparison_page
 
 app = FastAPI(
     title="SegmentLite API",
@@ -48,27 +35,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Optional RapidAPI / API Key Security Dependency
 RAPIDAPI_SECRET = os.getenv("RAPIDAPI_PROXY_SECRET", "")
 STANDALONE_KEY = os.getenv("SEGMENTLITE_API_KEY", "")
 
-try:
-    from config.settings import settings
-    default_stripe = settings.stripe_link_segmentlite_pro
-except Exception:
-    default_stripe = ""
-
-STRIPE_PRO_URL = (
-    default_stripe
-    or os.getenv("STRIPE_LINK_SEGMENTLITE_PRO")
-    or os.getenv("STRIPE_SEGMENTLITE_PRO_URL")
-    or "https://buy.stripe.com/test_segmentlite_pro"
-)
+from config.settings import settings
+STRIPE_PRO_URL = settings.stripe_link_segmentlite_pro or os.getenv("STRIPE_LINK_SEGMENTLITE_PRO") or os.getenv("STRIPE_SEGMENTLITE_PRO_URL") or "https://buy.stripe.com/test_segmentlite_pro"
 
 def verify_auth(
     x_rapidapi_proxy_secret: Optional[str] = Header(None),
     x_api_key: Optional[str] = Header(None),
     authorization: Optional[str] = Header(None),
 ):
+    """Enforces authentication and meters usage against store and billing engine."""
     token = x_api_key
     if not token and authorization and authorization.startswith("Bearer "):
         token = authorization[7:].strip()
@@ -76,114 +55,202 @@ def verify_auth(
     if token:
         if STANDALONE_KEY and token == STANDALONE_KEY:
             return True
+        # Check store first
         valid, msg, rec = store.verify_and_meter_key(token, units=1)
         if valid:
             return True
-        raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail=msg)
+        if "Quota exceeded" in msg:
+            raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=msg)
+
+        # Check core.billing engine
+        try:
+            from core.billing import billing
+            allowed, reason = billing.check_and_increment_quota(token, units=1)
+            if allowed:
+                return True
+            if "Quota exceeded" in reason:
+                raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=reason)
+        except Exception:
+            pass
+
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=msg)
 
     if RAPIDAPI_SECRET and x_rapidapi_proxy_secret == RAPIDAPI_SECRET:
         return True
-
-    if not RAPIDAPI_SECRET and not STANDALONE_KEY and not store.api_keys:
+    if not RAPIDAPI_SECRET and not STANDALONE_KEY:
+        # Development / open sandbox mode
         return True
-
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Missing or invalid API key. Pass 'X-API-Key' header or register at /v1/auth/signup"
+        detail="Unauthorized. Missing or invalid X-RapidAPI-Proxy-Secret or X-API-Key.",
     )
 
-@app.get("/", response_class=HTMLResponse, tags=["Public"])
-async def root():
+@app.get("/", response_class=HTMLResponse, tags=["Web"])
+async def index_page():
+    """Inbound comparison and developer landing page."""
     return render_comparison_page(stripe_pro_url=STRIPE_PRO_URL)
 
-@app.get("/health", tags=["Public"])
+@app.get("/compare/segment", response_class=HTMLResponse, tags=["Web"])
+async def compare_segment_page():
+    """SEO comparison page: Twilio Segment vs SegmentLite."""
+    return render_comparison_page(stripe_pro_url=STRIPE_PRO_URL)
+
+@app.get("/health", tags=["System"])
+@app.get("/v1/health", tags=["System"])
 async def health_check():
-    return {"status": "ok", "service": "SegmentLite API", "version": "1.0.0"}
+    """Uptime and health check monitor."""
+    return {"status": "healthy", "service": "SegmentLite API", "version": "1.0.0"}
 
-@app.post("/v1/auth/signup", response_model=SignupResponse, tags=["Authentication & Billing"])
-async def signup_developer(req: SignupRequest):
+@app.get("/privacy", response_class=HTMLResponse, tags=["Web"])
+async def privacy_policy_page():
+    """Privacy policy page."""
+    return HTMLResponse(\"\"\"<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <title>Privacy Policy - SegmentLite</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-950 text-slate-200 font-sans p-8 max-w-4xl mx-auto leading-relaxed">
+  <h1 class="text-3xl font-extrabold text-white mb-6">SegmentLite Privacy Policy</h1>
+  <p class="text-xs text-slate-400 mb-8">Last Updated: September 16, 2026</p>
+  
+  <h2 class="text-xl font-bold text-white mb-3">1. Data Ownership & Protection</h2>
+  <p class="mb-6 text-slate-300">SegmentLite does not sell, rent, monetize, or train AI models on customer event data. All telemetry ingested via <code>/v1/track</code> and <code>/v1/identify</code> is routed directly to your configured webhook endpoints in memory.</p>
+
+  <h2 class="text-xl font-bold text-white mb-3">2. Ingestion & Retention</h2>
+  <p class="mb-6 text-slate-300">Transient event logs are held only long enough to confirm successful HTTP 200 delivery to your destinations. Ephemeral delivery logs are retained for delivery metrics and debugging, then pruned.</p>
+
+  <h2 class="text-xl font-bold text-white mb-3">3. Developer Contact</h2>
+  <p class="mb-8 text-slate-300">For privacy inquiries or account deletion, email <a href="mailto:aurelian.dfru@gmail.com" class="text-sky-400 underline">aurelian.dfru@gmail.com</a>.</p>
+  
+  <p><a href="/" class="text-sky-400 hover:text-sky-300 underline text-sm">← Back to SegmentLite</a></p>
+</body>
+</html>\"\"\")
+
+@app.post("/v1/auth/signup", response_model=SignupResponse, tags=["Auth"])
+async def signup_for_api_key(req: SignupRequest):
+    """Generates an instant free developer API key (1,000 free events/month)."""
     if not req.email or "@" not in req.email:
-        raise HTTPException(status_code=400, detail="Valid developer email required.")
+        raise HTTPException(status_code=400, detail="A valid developer email is required.")
 
-    api_key, record = store.provision_api_key(req.email, plan="free")
-    curl_snippet = (
-        f'curl -X POST "https://segmentlite-api-dfru.fly.dev/v1/track" '
-        f'-H "X-API-Key: {api_key}" '
-        f'-H "Content-Type: application/json" '
-        f'-d '{{"event": "User Signed Up", "user_id": "usr_dev_01", "properties": {{"plan": "starter"}}}}''
+    clean_email = req.email.strip().lower()
+    key_data = store.create_api_key(clean_email, plan_id="free")
+    raw_key = key_data["raw_key"]
+    try:
+        from core.billing import billing
+        billing.generate_api_key(clean_email, "segmentlite_free")
+    except Exception:
+        pass
+
+    curl_ex = (
+        f'curl -X POST "https://segmentlite-api-dfru.fly.dev/v1/track" \\\n'
+        f'  -H "Content-Type: application/json" \\\n'
+        f'  -H "X-API-Key: {raw_key}" \\\n'
+        f'  -d \'{{"event": "User Signed Up", "user_id": "usr_1001", "properties": {{"plan": "Pro"}}}}\''
     )
-
     return SignupResponse(
         success=True,
-        email=record["email"],
-        api_key=api_key,
-        plan=record["plan"],
-        quota_limit=record["quota_limit"],
-        quota_used=record["quota_used"],
+        email=clean_email,
+        api_key=raw_key,
+        plan="free",
+        quota_limit=key_data["quota_limit"],
+        quota_used=key_data["quota_used"],
         stripe_upgrade_url=STRIPE_PRO_URL,
-        curl_example=curl_snippet
+        curl_example=curl_ex,
     )
 
-@app.post("/v1/webhooks/stripe", tags=["Authentication & Billing"])
-async def stripe_webhook(payload: dict):
-    event_type = payload.get("type", "")
-    data_object = payload.get("data", {}).get("object", {})
-    if event_type in ("checkout.session.completed", "customer.subscription.created"):
-        customer_email = data_object.get("customer_details", {}).get("email") or data_object.get("customer_email")
-        if customer_email:
-            upgraded = store.upgrade_key_to_pro(customer_email)
-            return {"status": "upgraded", "email": customer_email, "success": upgraded}
-    return {"status": "ignored", "type": event_type}
+@app.post("/v1/billing/webhook", tags=["Billing"])
+async def billing_webhook(payload: dict):
+    """Handles Stripe checkout and subscription upgrade webhooks."""
+    event_type = payload.get("type") or payload.get("event") or "checkout.session.completed"
+    email = (
+        payload.get("customer_email") or
+        payload.get("email") or
+        payload.get("data", {}).get("object", {}).get("customer_details", {}).get("email") or
+        payload.get("data", {}).get("object", {}).get("email")
+    )
+    if not email:
+        return {"status": "ignored", "reason": "No customer email found in webhook payload"}
+
+    store.upgrade_to_pro(email)
+    try:
+        from core.billing import billing
+        billing.handle_webhook_event("checkout.session.completed", {"customer_email": email, "plan_id": "segmentlite_pro", "amount_paid": 19.0})
+    except Exception:
+        pass
+
+    return {
+        "status": "success",
+        "event": event_type,
+        "email": email,
+        "plan": "pro",
+        "quota_limit": 1000000,
+    }
 
 @app.post("/v1/track", response_model=EventResponse, tags=["Events"])
-async def track_event(event_data: TrackEventRequest, authorized: bool = True):
-    verify_auth()
-    store.record_ingested(1)
-    dispatched_count = await router.dispatch_track(event_data)
+async def track_event(
+    event: TrackEventRequest,
+    x_rapidapi_proxy_secret: Optional[str] = Header(None),
+    x_api_key: Optional[str] = Header(None),
+    authorization: Optional[str] = Header(None),
+):
+    """Ingests an event and asynchronously fans it out to all configured destinations."""
+    verify_auth(x_rapidapi_proxy_secret, x_api_key, authorization)
+    event_id = f"evt_{uuid.uuid4().hex[:12]}"
+    store.record_ingested()
+    
+    queued = await router.dispatch_track(event)
+
     return EventResponse(
         success=True,
-        event_id=f"evt_{uuid.uuid4().hex[:12]}",
-        destinations_queued=dispatched_count,
-        message=f"Event '{event_data.event}' received and queued for {dispatched_count} destination(s)."
+        event_id=event_id,
+        destinations_queued=queued,
+        message=f"Event '{event.event}' queued for delivery to {queued} destination(s)."
     )
 
-@app.post("/v1/identify", response_model=EventResponse, tags=["Events"])
-async def identify_user(identify_data: IdentifyRequest, authorized: bool = True):
-    verify_auth()
-    store.record_ingested(1)
-    dispatched_count = await router.dispatch_identify(identify_data)
+@app.post("/v1/identify", response_model=EventResponse, tags=["Identity"])
+async def identify_user(
+    data: IdentifyRequest,
+    x_rapidapi_proxy_secret: Optional[str] = Header(None),
+    x_api_key: Optional[str] = Header(None),
+    authorization: Optional[str] = Header(None),
+):
+    """Associates attributes and traits with a unique user profile across all destinations."""
+    verify_auth(x_rapidapi_proxy_secret, x_api_key, authorization)
+    event_id = f"ident_{uuid.uuid4().hex[:12]}"
+    store.record_ingested()
+
+    queued = await router.dispatch_identify(data)
+
     return EventResponse(
         success=True,
-        event_id=f"ide_{uuid.uuid4().hex[:12]}",
-        destinations_queued=dispatched_count,
-        message=f"Traits for user '{identify_data.user_id}' queued for {dispatched_count} destination(s)."
+        event_id=event_id,
+        destinations_queued=queued,
+        message=f"Identify traits for user '{data.user_id}' queued to {queued} destination(s)."
     )
+
 
 @app.post("/v1/destinations", response_model=DestinationConfig, tags=["Destinations"])
-async def add_destination(dest: DestinationConfig, authorized: bool = True):
-    verify_auth()
-    return store.add_destination(dest)
+async def create_destination(dest: DestinationConfig):
+    """Configures a new target destination webhook to receive forwarded events."""
+    created = store.add_destination(dest)
+    return created
 
 @app.get("/v1/destinations", response_model=List[DestinationConfig], tags=["Destinations"])
-async def list_destinations(authorized: bool = True):
-    verify_auth()
+async def list_destinations():
+    """Returns all currently registered webhook destinations."""
     return store.get_destinations()
 
-@app.delete("/v1/destinations/{destination_id}", tags=["Destinations"])
-async def remove_destination(destination_id: str, authorized: bool = True):
-    verify_auth()
-    deleted = store.delete_destination(destination_id)
-    if not deleted:
-        raise HTTPException(status_code=404, detail="Destination not found")
-    return {"success": True, "message": f"Destination {destination_id} deleted"}
+@app.delete("/v1/destinations/{dest_id}", tags=["Destinations"])
+async def delete_destination(dest_id: str):
+    """Removes a destination webhook from routing."""
+    success = store.remove_destination(dest_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Destination not found.")
+    return {"success": True, "deleted_id": dest_id}
 
-@app.get("/v1/stats", response_model=StatsResponse, tags=["Monitoring"])
-async def get_stats():
-    m = store.get_metrics()
-    return StatsResponse(
-        total_events_ingested=m["ingested"],
-        total_events_forwarded=m["forwarded"],
-        total_failures=m["failures"],
-        active_destinations_count=m["active_destinations"],
-        uptime_seconds=m["uptime_seconds"]
-    )
+@app.get("/v1/stats", response_model=StatsResponse, tags=["Telemetry"])
+async def get_metrics():
+    """Returns real-time event throughput, delivery success counts, and active connections."""
+    return store.get_stats()
